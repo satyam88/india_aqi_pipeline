@@ -82,8 +82,9 @@ def create_pipeline(config: PipelineConfig) -> Pipeline:
 
     # ── Step 2 · Training ─────────────────────────────────────
     estimator = SKLearn(
-        entry_point="scripts/training.py",
+        entry_point="training.py",
         framework_version="1.2-1",
+        source_dir="scripts",
         instance_type=t_instance,
         instance_count=1,
         role=role,
@@ -220,7 +221,8 @@ def create_pipeline(config: PipelineConfig) -> Pipeline:
 
 
 def deploy_approved_model(config: PipelineConfig) -> str:
-    """Deploy the latest Approved model package to a real-time endpoint."""
+    from sagemaker.sklearn.model import SKLearnModel
+
     sm      = boto3.client("sagemaker", region_name=config.region)
     session = sagemaker.Session(boto_session=boto3.Session(region_name=config.region))
     role    = config.role_arn or sagemaker.get_execution_role()
@@ -236,23 +238,35 @@ def deploy_approved_model(config: PipelineConfig) -> str:
     if not packages:
         raise RuntimeError(f"No Approved model packages in: {config.model_package_group}")
 
-    arn = packages[0]["ModelPackageArn"]
-    logger.info("Deploying: %s", arn)
+    # Get model data S3 URI from the package
+    package_arn = packages[0]["ModelPackageArn"]
+    package_details = sm.describe_model_package(ModelPackageName=package_arn)
+    model_data = package_details["InferenceSpecification"]["Containers"][0]["ModelDataUrl"]
 
-    model = sagemaker.model.ModelPackage(
+    logger.info("Model data: %s", model_data)
+
+    model = SKLearnModel(
+        model_data=model_data,
         role=role,
-        model_package_arn=arn,
+        entry_point="training.py",
+        source_dir="scripts",
+        framework_version="1.2-1",
         sagemaker_session=session,
+        env={"OPENAQ_API_KEY": "{{resolve:secretsmanager:openaq/api-key:SecretString:api_key}}"},
     )
+
     model.deploy(
         initial_instance_count=config.endpoint_instance_count,
         instance_type=config.inference_instance_type,
         endpoint_name=config.endpoint_name,
-        environment={"OPENAQ_API_KEY": "{{resolve:secretsmanager:openaq/api-key:SecretString:api_key}}"},
         wait=True,
     )
+
     logger.info("Endpoint live: %s", config.endpoint_name)
     return config.endpoint_name
+
+
+
 
 
 def run(config: PipelineConfig, execute: bool = True, deploy: bool = False) -> None:
