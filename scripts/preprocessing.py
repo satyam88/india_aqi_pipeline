@@ -1,9 +1,3 @@
-cat > scripts/preprocessing.py << 'EOF'
-"""
-scripts/preprocessing.py
-=========================
-Runs inside SageMaker SKLearnProcessor container.
-"""
 import subprocess, sys
 subprocess.check_call([sys.executable, "-m", "pip", "install", "pyarrow", "-q"])
 
@@ -140,4 +134,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-EOF
