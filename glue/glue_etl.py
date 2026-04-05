@@ -45,7 +45,7 @@ spark       = glueContext.spark_session
 job         = Job(glueContext)
 
 args = getResolvedOptions(sys.argv, ["JOB_NAME", "S3_OUTPUT_PATH"])
-for key, default in [("LOOKBACK_DAYS", "30"), ("SECRET_NAME", "openaq/api-key")]:
+for key, default in [("LOOKBACK_DAYS", "60"), ("SECRET_NAME", "openaq/api-key")]:
     args[key] = getResolvedOptions(sys.argv, [key])[key] if f"--{key}" in sys.argv else default
 
 job.init(args["JOB_NAME"], args)

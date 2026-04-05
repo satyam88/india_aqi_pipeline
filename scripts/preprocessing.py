@@ -7,6 +7,7 @@ import json
 import logging
 import os
 
+import joblib
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -25,13 +26,8 @@ CAT_COLS  = ["city"]
 
 
 def load_parquet(input_dir: str) -> pd.DataFrame:
-    # Search all levels
     files = glob.glob(os.path.join(input_dir, "**", "*.parquet"), recursive=True)
-
-    # Also check root level
     files += glob.glob(os.path.join(input_dir, "*.parquet"))
-
-    # Deduplicate
     files = list(set(files))
 
     logger.info("Input directory contents:")
@@ -74,7 +70,7 @@ def encode_and_scale(X_train, X_val, X_test):
 
     logger.info("Feature shape — train: %s  val: %s  test: %s",
                 X_train.shape, X_val.shape, X_test.shape)
-    return X_train, X_val, X_test
+    return X_train, X_val, X_test, scaler
 
 
 def save_split(X, y, name, filename):
@@ -117,17 +113,25 @@ def main():
         X_tmp, y_tmp, test_size=val_size, random_state=42, stratify=y_tmp
     )
 
-    X_train, X_val, X_test = encode_and_scale(X_train, X_val, X_test)
+    # ── encode + scale (scaler returned for persistence) ──────────────────
+    X_train, X_val, X_test, scaler = encode_and_scale(X_train, X_val, X_test)
 
     save_split(X_train, y_train, "train",      "train.csv")
     save_split(X_val,   y_val,   "validation", "validation.csv")
     save_split(X_test,  y_test,  "test",       "test.csv")
 
-    # Save column order for inference
-    col_path = os.path.join(OUTPUT_DIR, "train", "columns.json")
+    # ── Save column order for inference ───────────────────────────────────
+    train_out_dir = os.path.join(OUTPUT_DIR, "train")
+
+    col_path = os.path.join(train_out_dir, "columns.json")
     with open(col_path, "w") as f:
         json.dump(list(X_train.columns), f)
-    logger.info("columns.json saved.")
+    logger.info("columns.json saved → %s", col_path)
+
+    # ── Save scaler for inference ──────────────────────────────────────────
+    scaler_path = os.path.join(train_out_dir, "scaler.joblib")
+    joblib.dump(scaler, scaler_path)
+    logger.info("scaler.joblib saved → %s", scaler_path)
 
     logger.info("Preprocessing complete.")
 
